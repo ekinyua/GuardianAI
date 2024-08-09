@@ -14,14 +14,14 @@ class MyApp extends StatelessWidget {
       designSize: const Size(375, 812),
       minTextAdapt: true,
       splitScreenMode: true,
-      builder: (context, child) => const MaterialApp(
+      builder: (context, child) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'GuardianAI',
-        // theme: ThemeData(
-        //   colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        //   useMaterial3: true,
-        // ),
-        home: OnboardingScreen(),
+        theme: ThemeData(
+          scaffoldBackgroundColor: const Color(0xff000000),
+          useMaterial3: true,
+        ),
+        home: const OnboardingScreen(),
       ),
     );
   }

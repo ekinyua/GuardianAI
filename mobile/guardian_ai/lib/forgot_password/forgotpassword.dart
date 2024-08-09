@@ -10,7 +10,6 @@ class ForgotPasswordScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Scaffold(
-        backgroundColor: const Color(0xff000000),
         body: SingleChildScrollView(
           scrollDirection: Axis.vertical,
           child: Center(
