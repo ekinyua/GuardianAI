@@ -102,7 +102,7 @@ class _PasswordInputFieldState extends State<PasswordInputField> {
               enabledBorder: InputBorder.none,
               errorBorder: InputBorder.none,
               disabledBorder: InputBorder.none,
-              errorMaxLines: 3,
+              // errorMaxLines: 2,
               contentPadding: const EdgeInsets.only(
                 left: 15,
                 bottom: 11,

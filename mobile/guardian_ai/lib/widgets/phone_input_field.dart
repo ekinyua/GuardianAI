@@ -55,7 +55,7 @@ class _PhoneInputFieldState extends State<PhoneInputField> {
               enabledBorder: InputBorder.none,
               errorBorder: InputBorder.none,
               disabledBorder: InputBorder.none,
-              errorMaxLines: 3,
+              // errorMaxLines: 2,
               hintText: widget.hint,
               hintStyle: Theme.of(context).textTheme.titleMedium!.copyWith(
                     color: AppCustomColors.grayishblue,

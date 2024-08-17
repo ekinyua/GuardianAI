@@ -31,10 +31,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
   void _submitForm() async {
     if (_formKey.currentState!.validate()) {
       Navigator.push(
-          context,
-          PageTransition(
-              type: PageTransitionType.rightToLeft,
-              child: const LocationScreen()));
+        context,
+        PageTransition(
+          type: PageTransitionType.rightToLeft,
+          child: const LocationScreen(),
+        ),
+      );
       setState(() {
         _isloading = true;
       });
@@ -91,8 +93,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Widget _buildBody() {
-    return SafeArea(
-        child: SingleChildScrollView(
+    return SingleChildScrollView(
       scrollDirection: Axis.vertical,
       child: Column(
         children: [
@@ -239,7 +240,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
           )
         ],
       ),
-    ));
+    );
   }
 }
 
