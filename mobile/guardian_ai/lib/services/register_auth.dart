@@ -3,12 +3,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+void log(String message, {String level = 'INFO'}) {
+  print('[$level] $message');
+}
+
 class RegisterAuth {
   final String name;
   final String email;
   final String password;
   final String phoneNumber;
-  final String emergencyContact;
+  final List emergencyContact;
 
   RegisterAuth({
     required this.name,
@@ -40,20 +44,35 @@ class UserRegistration {
         headers: <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
         },
-        body: jsonEncode(
-          user.toJson(),
-        ),
+        body: jsonEncode(user.toJson()),
       );
 
-      if (response.statusCode == 200) {
+      // log('API URL: $apiUrl');
+      // log('Request Body: ${jsonEncode(user.toJson())}');
+      // log('Status Code: ${response.statusCode}');
+      // log('Response Body: ${response.body}');
+
+      if (response.statusCode == 201) {
         final responseData = jsonDecode(response.body);
         return responseData['user_id'];
-      } else {
+      } else if (response.statusCode == 400) {
         final errorData = jsonDecode(response.body);
-        throw Exception(errorData['Error']);
+        if (errorData['error'] != null &&
+            errorData['error'].contains('duplicate key error')) {
+          log('Email is already registered. Please use a different email.',
+              level: 'WARNING');
+        } else if (errorData['error'] != null) {
+          log('Error: ${errorData['error']}', level: 'WARNING');
+        } else {
+          log('Unknown error occurred.', level: 'WARNING');
+        }
+        throw Exception(errorData['error']);
+      } else {
+        log('Unexpected status code: ${response.statusCode}', level: 'SEVERE');
+        throw Exception('Unexpected error occurred.');
       }
     } catch (e) {
-      print('Error registering user: $e');
+      log('Error registering user: $e', level: 'SEVERE');
       return null;
     }
   }

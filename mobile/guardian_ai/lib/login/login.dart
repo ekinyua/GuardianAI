@@ -53,8 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (response.userId != null) {
           // Login successful
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Login successful. User ID: ${response.userId}')),
+            const SnackBar(content: Text('Login successful.')),
           );
           // Navigate to next screen or perform other actions
         } else {

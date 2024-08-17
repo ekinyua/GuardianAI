@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:guardian_ai/location/location.dart';
 import 'package:guardian_ai/login/login.dart';
 import 'package:guardian_ai/services/register_auth.dart';
 import 'package:guardian_ai/widgets/phone_input_field.dart';
@@ -34,7 +33,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         context,
         PageTransition(
           type: PageTransitionType.rightToLeft,
-          child: const LocationScreen(),
+          child: const LoginScreen(),
         ),
       );
       setState(() {
@@ -46,7 +45,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         email: _emailController.text,
         password: _passwordController.text,
         phoneNumber: _phoneNumberController.text,
-        emergencyContact: _emergencyContactController.text,
+        emergencyContact: [_emergencyContactController.text],
       );
 
       final userId = await UserRegistration.registerUser(user);
