@@ -3,6 +3,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:guardian_ai/profile/profile.dart';
 import 'package:location/location.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LiveLocationScreen extends StatefulWidget {
   const LiveLocationScreen({super.key});
@@ -20,6 +22,50 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
   void initState() {
     super.initState();
     getLocationUpdates();
+  }
+
+  String formatLocationForSharing() {
+    if (_currentP == null) return "Location not available";
+    return "My current location: https://www.google.com/maps/search/?api=1&query=${_currentP!.latitude},${_currentP!.longitude}";
+  }
+
+  void shareLocation() {
+    String locationMessage = formatLocationForSharing();
+    Share.share(locationMessage, subject: 'My Current Location');
+  }
+
+  void shareViaWhatsApp() async {
+    String locationMessage = formatLocationForSharing();
+    String whatsappUrl =
+        "whatsapp://send?text=${Uri.encodeComponent(locationMessage)}";
+    if (await canLaunch(whatsappUrl)) {
+      await launch(whatsappUrl);
+    } else {
+      // WhatsApp not installed
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('WhatsApp is not installed on your device')),
+      );
+    }
+  }
+
+  void shareViaEmail() {
+    String locationMessage = formatLocationForSharing();
+    final Uri emailLaunchUri = Uri(
+      scheme: 'mailto',
+      path: '',
+      query: encodeQueryParameters(<String, String>{
+        'subject': 'My Current Location',
+        'body': locationMessage
+      }),
+    );
+    launch(emailLaunchUri.toString());
+  }
+
+  String? encodeQueryParameters(Map<String, String> params) {
+    return params.entries
+        .map((e) =>
+            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
   }
 
   @override
@@ -137,27 +183,43 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
             SizedBox(height: 30.h),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 20.w),
-              child: ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  minimumSize: Size(double.infinity, 50.h),
-                  backgroundColor: const Color(0xff129CED),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10.r),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: shareLocation,
+                    icon: Icon(Icons.share, color: Colors.white),
+                    label: Text('Share'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xff129CED),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                    ),
                   ),
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 20.w, vertical: 10.h),
-                  textStyle: const TextStyle(color: Color(0xffFFFFFF)),
-                ),
-                child: Text(
-                  'Start Sharing',
-                  style: TextStyle(
-                    fontSize: 14.sp,
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                  ElevatedButton.icon(
+                    onPressed: shareViaWhatsApp,
+                    icon: Icon(Icons.share, color: Colors.white),
+                    label: Text('WhatsApp'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                    ),
                   ),
-                ),
+                  ElevatedButton.icon(
+                    onPressed: shareViaEmail,
+                    icon: Icon(Icons.email, color: Colors.white),
+                    label: Text('Email'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
