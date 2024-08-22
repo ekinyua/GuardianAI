@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">GuardianAI</string>
+    <string name="safe_route">Safe Route</string>
+    <string name="recording">Recording</string>
+    <string name="profile">Profile</string>
+    <string name="live_location">Live Location</string>
+    <string-array name="days_of_week">
+        <item>Sunday</item>
+        <item>Monday</item>
+        <item>Tuesday</item>
+        <item>Wednesday</item>
+        <item>Thursday</item>
+        <item>Friday</item>
+        <item>Saturday</item>
+    </string-array>
+</resources>

@@ -1,0 +1,6 @@
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Adjust the alpha value for transparency -->
+    <solid android:color="#801E1E2D"/> <!-- 50% transparent -->
+    <corners android:radius="10dp"/>
+    <stroke android:color="@color/button_color"/>
+</shape>
