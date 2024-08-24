@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.widget.ImageView;
@@ -21,6 +22,9 @@ import androidx.core.content.ContextCompat;
 
 import com.example.guardianai.R;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.OkHttpClient;
@@ -30,11 +34,14 @@ import okhttp3.Response;
 import okhttp3.MultipartBody;
 import okhttp3.MediaType;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -47,9 +54,13 @@ public class Recording extends AppCompatActivity {
     private static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
     private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
     private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
-    private static final String API_URL = "https://guardianai-m2kc.onrender.com/analyze_audio";
+    private static final String API_URL2 = "https://guardianai-m2kc.onrender.com/analyze_audio";
+    private static final String API_URL = "https://api-inference.huggingface.co/models/ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition";
+    private static final String API_KEY = "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";
     private static final long RECORDING_INTERVAL_MS = 5000; // 5 seconds
     private static final int API_TIMEOUT_MS = 60000; // 60 seconds
+
+
 
     private AudioRecord audioRecord;
     private File audioFile;
@@ -61,10 +72,16 @@ public class Recording extends AppCompatActivity {
     private TextView recordingControlText;
     private Animation pulseAnimation;
 
+    private ByteArrayOutputStream audioBuffer;
+    private String audioFilePath;
+    private TextView textViewEmotion1, textViewEmotion2;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_recording); // Ensure this matches your layout file
+        textViewEmotion1 = findViewById(R.id.textViewEmotion1);
+        textViewEmotion2 = findViewById(R.id.textViewEmotion2);
 
         micIcon = findViewById(R.id.mic_icon);
         recordingControlText = findViewById(R.id.recording_control_text);
@@ -92,195 +109,181 @@ public class Recording extends AppCompatActivity {
                     REQUEST_CODE_PERMISSIONS);
         }
     }
-
     private void startRecording() {
-        if (!isRecording) {
-            isRecording = true;
-            recordingControlText.setText("Stop Recording");
-            Log.d(TAG, "Starting recording");
+        recordingControlText.setText("Stop Recording");
+        Log.d(TAG, "Starting recording");
 
-            micIcon.startAnimation(pulseAnimation); // Start pulse animation
+        micIcon.startAnimation(pulseAnimation);
 
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                Log.e(TAG, "Record audio permission not granted");
-                return;
-            }
 
-            audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, BUFFER_SIZE);
+        audioBuffer = new ByteArrayOutputStream();
 
-            // Create a unique filename for each recording
-            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-            audioFile = new File(getExternalFilesDir(null), "audio_" + timestamp + ".pcm");
-
-            try {
-                if (audioFile.createNewFile()) {
-                    Log.d(TAG, "Audio file created: " + audioFile.getAbsolutePath());
-                } else {
-                    Log.d(TAG, "Audio file already exists: " + audioFile.getAbsolutePath());
-                }
-            } catch (IOException e) {
-                Log.e(TAG, "Error creating audio file", e);
-            }
-
-            audioRecord.startRecording();
-
-            // Schedule saving and sending audio after 5 seconds
-            saveAndSendAudioRunnable = this::saveAndSendAudioFileToApi;
-            handler.postDelayed(saveAndSendAudioRunnable, RECORDING_INTERVAL_MS);
-            Log.d(TAG, "Recording started");
+        int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            return;
         }
+        audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize);
+
+        byte[] audioData = new byte[bufferSize];
+        audioRecord.startRecording();
+        isRecording = true;
+
+        // Start a new thread to read audio data
+        new Thread(() -> {
+            while (isRecording) {
+                int read = audioRecord.read(audioData, 0, bufferSize);
+                if (read > 0) {
+                    audioBuffer.write(audioData, 0, read);
+                }
+            }
+        }).start();
     }
 
     private void stopRecording() {
         if (isRecording) {
-            isRecording = false;
-            recordingControlText.setText("Start Recording");
-            Log.d(TAG, "Stopping recording");
-
-            micIcon.clearAnimation(); // Stop pulse animation
-
-            if (audioRecord != null) {
-                audioRecord.stop();
-                audioRecord.release();
-                audioRecord = null;
-                handler.removeCallbacks(saveAndSendAudioRunnable);
-                Log.d(TAG, "Recording stopped");
-            }
-        }
-    }
-
-    private void saveAndSendAudioFileToApi() {
-        if (audioFile != null && audioFile.exists()) {
-            // Convert PCM to WAV format
-            wavFile = new File(getExternalFilesDir(null), "audio_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".wav");
             try {
-                convertPcmToWav(audioFile, wavFile);
+                // Stop recording
+                isRecording = false;
+                recordingControlText.setText("Start Recording");
+                Log.d(TAG, "Stopping recording");
 
-                if (wavFile.getName().endsWith(".wav")) {
-                    Log.d(TAG, "Audio file is a valid WAV file, preparing to send to API: " + wavFile.getAbsolutePath());
+                // Stop and release AudioRecord
+                if (audioRecord != null) {
+                    audioRecord.stop();
+                    audioRecord.release();
+                    audioRecord = null;
+                    Log.d(TAG, "Recording stopped successfully.");
 
-                    new Thread(() -> {
-                        MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM);
-                        builder.addFormDataPart("file", wavFile.getName(), RequestBody.create(MediaType.parse("audio/wav"), wavFile));
+                    // Save the recorded audio to a file
+                    if (audioBuffer != null) {
+                        byte[] audioData = audioBuffer.toByteArray();
+                        saveAudioToFile(audioData);
 
-                        RequestBody requestBody = builder.build();
-                        Request request = new Request.Builder()
-                                .url(API_URL)
-                                .post(requestBody)
-                                .addHeader("Content-Type", "audio/wav")
-                                .build();
+                        // Send the audio file to the API
+                        sendAudioToAPI();
+                    } else {
+                        Log.e(TAG, "Audio buffer is null");
+                    }
 
-                        OkHttpClient client = new OkHttpClient.Builder()
-                                .callTimeout(API_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-                                .build();
-
-                        client.newCall(request).enqueue(new Callback() {
-                            @Override
-                            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                                Log.e(TAG, "Error sending audio file", e);
-                                runOnUiThread(() -> {
-                                    Toast.makeText(Recording.this, "Failed to send audio file", Toast.LENGTH_SHORT).show();
-                                });
-                            }
-
-                            @Override
-                            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                                Log.d(TAG, "API Response Code: " + response.code());
-                                Log.d(TAG, "API Response Message: " + response.message());
-
-                                String errorBody = response.body() != null ? response.body().string() : "No error body";
-                                Log.e(TAG, "Error Body: " + errorBody);
-
-                                if (response.isSuccessful()) {
-                                    Log.d(TAG, "Audio file sent successfully");
-                                    if (wavFile.delete()) {
-                                        Log.d(TAG, "Audio file deleted: " + wavFile.getAbsolutePath());
-                                    } else {
-                                        Log.e(TAG, "Failed to delete audio file: " + wavFile.getAbsolutePath());
-                                    }
-                                } else {
-                                    Log.e(TAG, "Failed to send audio file, response code: " + response.code() + ", response message: " + response.message());
-                                    runOnUiThread(() -> {
-                                        Toast.makeText(Recording.this, "Failed to send audio file", Toast.LENGTH_SHORT).show();
-                                    });
-                                }
-                            }
-                        });
-                    }).start();
-                } else {
-                    Log.e(TAG, "File is not a valid WAV file: " + wavFile.getAbsolutePath());
-                    runOnUiThread(() -> {
-                        Toast.makeText(Recording.this, "Invalid file format", Toast.LENGTH_SHORT).show();
-                    });
+                    // Stop pulse animation
+                    micIcon.clearAnimation();
                 }
-            } catch (IOException e) {
-                Log.e(TAG, "Error converting PCM to WAV", e);
+            } catch (Exception e) {
+                Log.e(TAG, "Error stopping recording: " + e.getMessage(), e);
             }
-        } else {
-            Log.e(TAG, "Audio file does not exist");
         }
     }
 
-    private void convertPcmToWav(File pcmFile, File wavFile) throws IOException {
-        try (FileOutputStream out = new FileOutputStream(wavFile);
-             InputStream in = new FileInputStream(pcmFile)) {
 
-            byte[] header = new byte[44];
-            int sampleRate = SAMPLE_RATE;
-            int bitsPerSample = 16;
-            int channels = 1;
-            int totalDataLen = (int) pcmFile.length() + 36;
-            int byteRate = sampleRate * channels * bitsPerSample / 8;
+    private void saveAudioToFile(byte[] audioData) {
+        File audioFile = new File(getExternalFilesDir(null), "audio.wav");
+        audioFilePath = audioFile.getAbsolutePath();
 
-            // RIFF chunk descriptor
-            header[0] = 'R';
-            header[1] = 'I';
-            header[2] = 'F';
-            header[3] = 'F';
-            writeInt(out, totalDataLen);
-            header[8] = 'W';
-            header[9] = 'A';
-            header[10] = 'V';
-            header[11] = 'E';
+        try (FileOutputStream outputStream = new FileOutputStream(audioFile)) {
+            // Write WAV header
+            writeWavHeader(outputStream, audioData.length);
 
-            // Format
-            header[12] = 'f';
-            header[13] = 'm';
-            header[14] = 't';
-            header[15] = ' ';
-            header[16] = 16;
-            header[20] = 1;
-            header[22] = (byte) channels;
-            writeInt(out, sampleRate);
-            writeInt(out, byteRate);
-            header[32] = (byte) (channels * bitsPerSample / 8);
-            header[34] = (byte) bitsPerSample;
-
-            // Data
-            header[36] = 'd';
-            header[37] = 'a';
-            header[38] = 't';
-            header[39] = 'a';
-            writeInt(out, (int) pcmFile.length());
-
-            out.write(header, 0, 44);
-
-            byte[] buffer = new byte[BUFFER_SIZE];
-            int bytesRead;
-            while ((bytesRead = in.read(buffer)) != -1) {
-                out.write(buffer, 0, bytesRead);
-            }
-
-            Log.d(TAG, "PCM to WAV conversion completed");
+            // Write audio data
+            outputStream.write(audioData);
+        } catch (IOException e) {
+            Log.e(TAG, "Failed to save audio file: " + e.getMessage(), e);
         }
     }
 
-    private void writeInt(FileOutputStream out, int value) throws IOException {
-        out.write(value & 0xFF);
-        out.write((value >> 8) & 0xFF);
-        out.write((value >> 16) & 0xFF);
-        out.write((value >> 24) & 0xFF);
+    private void writeWavHeader(FileOutputStream outputStream, int dataSize) throws IOException {
+        int fileSize = 36 + dataSize; // Header size + audio data size
+        int sampleRate = SAMPLE_RATE;
+        short channels = 1;
+        short bitsPerSample = 16;
+
+        ByteBuffer header = ByteBuffer.allocate(44);
+        header.order(ByteOrder.LITTLE_ENDIAN);
+
+        header.put("RIFF".getBytes()); // ChunkID
+        header.putInt(fileSize); // ChunkSize
+        header.put("WAVE".getBytes()); // Format
+        header.put("fmt ".getBytes()); // Subchunk1ID
+        header.putInt(16); // Subchunk1Size
+        header.putShort((short) 1); // AudioFormat
+        header.putShort(channels); // NumChannels
+        header.putInt(sampleRate); // SampleRate
+        header.putInt(sampleRate * channels * bitsPerSample / 8); // ByteRate
+        header.putShort((short) (channels * bitsPerSample / 8)); // BlockAlign
+        header.putShort(bitsPerSample); // BitsPerSample
+        header.put("data".getBytes()); // Subchunk2ID
+        header.putInt(dataSize); // Subchunk2Size
+
+        outputStream.write(header.array());
     }
+
+    private void sendAudioToAPI() {
+        // Create an OkHttpClient instance with a 60-second timeout
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS) // Connection timeout
+                .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)   // Write timeout
+                .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)    // Read timeout
+                .build();
+
+        File audioFile = new File(audioFilePath);
+
+        if (!audioFile.exists()) {
+            Log.e(TAG, "Audio file does not exist: " + audioFile.getAbsolutePath());
+            return;
+        }
+
+        RequestBody requestBody = RequestBody.create(MediaType.parse("audio/wav"), audioFile);
+
+        Request request = new Request.Builder()
+                .url(API_URL)
+                .addHeader("Authorization", "Bearer " + API_KEY)
+                .post(requestBody)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "API Request Failed: ", e);
+                Log.e(TAG, "Request URL: " + request.url());
+                Log.e(TAG, "Request Headers: " + request.headers());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    Log.e(TAG, "API Request was not successful. Response code: " + response.code());
+                    Log.e(TAG, "Response Headers: " + response.headers());
+                    Log.e(TAG, "Response Body: " + response.body().string());
+                    return;
+                }
+
+                try {
+                    String responseBody = response.body().string();
+                    Log.d(TAG, "Response Body: " + responseBody);
+
+                    JSONArray jsonArray = new JSONArray(responseBody);
+
+                    if (jsonArray.length() > 1) {
+                        JSONObject emotion1 = jsonArray.getJSONObject(0);
+                        JSONObject emotion2 = jsonArray.getJSONObject(1);
+
+                        String emotionLabel1 = emotion1.getString("label");
+                        String emotionLabel2 = emotion2.getString("label");
+
+                        handler.post(() -> {
+                            textViewEmotion1.setText("Emotion 1: " + emotionLabel1);
+                            textViewEmotion2.setText("Emotion 2: " + emotionLabel2);
+                        });
+
+                    } else {
+                        Log.e(TAG, "Unexpected response format. JSON array does not have enough elements.");
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to parse API response: " + e.getMessage(), e);
+                }
+            }
+        });
+    }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -294,294 +297,5 @@ public class Recording extends AppCompatActivity {
         }
     }
 }
-
-
-
-//package com.example.guardianai.activities;
-//
-//import android.Manifest;
-//import android.content.pm.PackageManager;
-//import android.media.AudioFormat;
-//import android.media.AudioRecord;
-//import android.media.MediaRecorder;
-//import android.os.Bundle;
-//import android.os.Handler;
-//import android.util.Log;
-//import android.widget.ImageView;
-//import android.widget.TextView;
-//import android.widget.Toast;
-//import androidx.annotation.NonNull;
-//import androidx.appcompat.app.AppCompatActivity;
-//import androidx.core.app.ActivityCompat;
-//import androidx.core.content.ContextCompat;
-//
-//import com.example.guardianai.R;
-//
-//import okhttp3.Call;
-//import okhttp3.Callback;
-//import okhttp3.OkHttpClient;
-//import okhttp3.Request;
-//import okhttp3.RequestBody;
-//import okhttp3.Response;
-//import okhttp3.MultipartBody;
-//import okhttp3.MediaType;
-//
-//import java.io.File;
-//import java.io.FileInputStream;
-//import java.io.FileOutputStream;
-//import java.io.IOException;
-//import java.io.InputStream;
-//import java.text.SimpleDateFormat;
-//import java.util.Date;
-//import java.util.Locale;
-//
-//public class Recording extends AppCompatActivity {
-//
-//    private static final String TAG = "Recording";
-//    private static final int REQUEST_CODE_PERMISSIONS = 1001;
-//    private static final int SAMPLE_RATE = 16000;
-//    private static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
-//    private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
-//    private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
-//    private static final String API_URL = "https://guardianai-m2kc.onrender.com/analyze_audio";
-//    private static final long RECORDING_INTERVAL_MS = 5000; // 5 seconds
-//    private static final int API_TIMEOUT_MS = 60000; // 60 seconds
-//
-//    private AudioRecord audioRecord;
-//    private File audioFile;
-//    private File wavFile;
-//    private Handler handler;
-//    private Runnable saveAndSendAudioRunnable;
-//    private boolean isRecording = false;
-//    private ImageView micIcon;
-//    private TextView recordingControlText;
-//
-//    @Override
-//    protected void onCreate(Bundle savedInstanceState) {
-//        super.onCreate(savedInstanceState);
-//        setContentView(R.layout.activity_recording); // Ensure this matches your layout file
-//
-//        micIcon = findViewById(R.id.mic_icon);
-//        recordingControlText = findViewById(R.id.recording_control_text);
-//
-//        handler = new Handler();
-//
-//        recordingControlText.setOnClickListener(v -> {
-//            if (isRecording) {
-//                stopRecording();
-//            } else {
-//                startRecording();
-//            }
-//        });
-//
-//        checkPermissions();
-//    }
-//
-//    private void checkPermissions() {
-//        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
-//                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-//            ActivityCompat.requestPermissions(this,
-//                    new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE},
-//                    REQUEST_CODE_PERMISSIONS);
-//        }
-//    }
-//
-//    private void startRecording() {
-//        if (!isRecording) {
-//            isRecording = true;
-//            recordingControlText.setText("Stop Recording");
-//            Log.d(TAG, "Starting recording");
-//
-//            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-//                Log.e(TAG, "Record audio permission not granted");
-//                return;
-//            }
-//
-//            audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, BUFFER_SIZE);
-//
-//            // Create a unique filename for each recording
-//            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-//            audioFile = new File(getExternalFilesDir(null), "audio_" + timestamp + ".pcm");
-//
-//            try {
-//                if (audioFile.createNewFile()) {
-//                    Log.d(TAG, "Audio file created: " + audioFile.getAbsolutePath());
-//                } else {
-//                    Log.d(TAG, "Audio file already exists: " + audioFile.getAbsolutePath());
-//                }
-//            } catch (IOException e) {
-//                Log.e(TAG, "Error creating audio file", e);
-//            }
-//
-//            audioRecord.startRecording();
-//
-//            // Schedule saving and sending audio after 5 seconds
-//            saveAndSendAudioRunnable = this::saveAndSendAudioFileToApi;
-//            handler.postDelayed(saveAndSendAudioRunnable, RECORDING_INTERVAL_MS);
-//            Log.d(TAG, "Recording started");
-//        }
-//    }
-//
-//    private void stopRecording() {
-//        if (isRecording) {
-//            isRecording = false;
-//            recordingControlText.setText("Start Recording");
-//            Log.d(TAG, "Stopping recording");
-//
-//            if (audioRecord != null) {
-//                audioRecord.stop();
-//                audioRecord.release();
-//                audioRecord = null;
-//                micIcon.clearAnimation();
-//                handler.removeCallbacks(saveAndSendAudioRunnable);
-//                Log.d(TAG, "Recording stopped");
-//            }
-//        }
-//    }
-//
-//    private void saveAndSendAudioFileToApi() {
-//        if (audioFile != null && audioFile.exists()) {
-//            // Convert PCM to WAV format
-//            wavFile = new File(getExternalFilesDir(null), "audio_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date()) + ".wav");
-//            try {
-//                convertPcmToWav(audioFile, wavFile);
-//
-//                if (wavFile.getName().endsWith(".wav")) {
-//                    Log.d(TAG, "Audio file is a valid WAV file, preparing to send to API: " + wavFile.getAbsolutePath());
-//
-//                    new Thread(() -> {
-//                        MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM);
-//                        builder.addFormDataPart("file", wavFile.getName(), RequestBody.create(MediaType.parse("audio/wav"), wavFile));
-//
-//                        RequestBody requestBody = builder.build();
-//                        Request request = new Request.Builder()
-//                                .url(API_URL)
-//                                .post(requestBody)
-//                                .addHeader("Content-Type", "audio/wav")
-//                                .build();
-//
-//                        OkHttpClient client = new OkHttpClient.Builder()
-//                                .callTimeout(API_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-//                                .build();
-//
-//                        client.newCall(request).enqueue(new Callback() {
-//                            @Override
-//                            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-//                                Log.e(TAG, "Error sending audio file", e);
-//                                runOnUiThread(() -> {
-//                                    Toast.makeText(Recording.this, "Failed to send audio file", Toast.LENGTH_SHORT).show();
-//                                });
-//                            }
-//
-//                            @Override
-//                            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-//                                Log.d(TAG, "API Response Code: " + response.code());
-//                                Log.d(TAG, "API Response Message: " + response.message());
-//
-//                                String errorBody = response.body() != null ? response.body().string() : "No error body";
-//                                Log.e(TAG, "Error Body: " + errorBody);
-//
-//                                if (response.isSuccessful()) {
-//                                    Log.d(TAG, "Audio file sent successfully");
-//                                    if (wavFile.delete()) {
-//                                        Log.d(TAG, "Audio file deleted: " + wavFile.getAbsolutePath());
-//                                    } else {
-//                                        Log.e(TAG, "Failed to delete audio file: " + wavFile.getAbsolutePath());
-//                                    }
-//                                } else {
-//                                    Log.e(TAG, "Failed to send audio file, response code: " + response.code() + ", response message: " + response.message());
-//                                    runOnUiThread(() -> {
-//                                        Toast.makeText(Recording.this, "Failed to send audio file", Toast.LENGTH_SHORT).show();
-//                                    });
-//                                }
-//                            }
-//                        });
-//                    }).start();
-//                } else {
-//                    Log.e(TAG, "File is not a valid WAV file: " + wavFile.getAbsolutePath());
-//                    runOnUiThread(() -> {
-//                        Toast.makeText(Recording.this, "Invalid file format", Toast.LENGTH_SHORT).show();
-//                    });
-//                }
-//            } catch (IOException e) {
-//                Log.e(TAG, "Error converting PCM to WAV", e);
-//            }
-//        } else {
-//            Log.e(TAG, "Audio file does not exist");
-//        }
-//    }
-//
-//
-//    private void convertPcmToWav(File pcmFile, File wavFile) throws IOException {
-//        try (FileOutputStream out = new FileOutputStream(wavFile);
-//             InputStream in = new FileInputStream(pcmFile)) {
-//
-//            byte[] header = new byte[44];
-//            int sampleRate = SAMPLE_RATE;
-//            int bitsPerSample = 16;
-//            int channels = 1;
-//            int totalDataLen = (int) pcmFile.length() + 36;
-//            int byteRate = sampleRate * channels * bitsPerSample / 8;
-//
-//            // RIFF chunk descriptor
-//            header[0] = 'R';
-//            header[1] = 'I';
-//            header[2] = 'F';
-//            header[3] = 'F';
-//            writeInt(out, totalDataLen);
-//            header[8] = 'W';
-//            header[9] = 'A';
-//            header[10] = 'V';
-//            header[11] = 'E';
-//
-//            // Format
-//            header[12] = 'f';
-//            header[13] = 'm';
-//            header[14] = 't';
-//            header[15] = ' ';
-//            writeInt(out, 16); // Subchunk1Size
-//            writeShort(out, (short) 1); // AudioFormat
-//            writeShort(out, (short) channels); // NumChannels
-//            writeInt(out, sampleRate); // SampleRate
-//            writeInt(out, byteRate); // ByteRate
-//            writeShort(out, (short) (channels * bitsPerSample / 8)); // BlockAlign
-//            writeShort(out, (short) bitsPerSample); // BitsPerSample
-//
-//            // Data
-//            header[36] = 'd';
-//            header[37] = 'a';
-//            header[38] = 't';
-//            header[39] = 'a';
-//            writeInt(out, (int) pcmFile.length());
-//
-//            out.write(header);
-//            byte[] buffer = new byte[BUFFER_SIZE];
-//            int bytesRead;
-//            while ((bytesRead = in.read(buffer)) != -1) {
-//                out.write(buffer, 0, bytesRead);
-//            }
-//        }
-//    }
-//
-//    private void writeInt(FileOutputStream out, int value) throws IOException {
-//        out.write(value & 0xff);
-//        out.write((value >> 8) & 0xff);
-//        out.write((value >> 16) & 0xff);
-//        out.write((value >> 24) & 0xff);
-//    }
-//
-//    private void writeShort(FileOutputStream out, short value) throws IOException {
-//        out.write(value & 0xff);
-//        out.write((value >> 8) & 0xff);
-//    }
-//
-//    @Override
-//    protected void onDestroy() {
-//        super.onDestroy();
-//        if (isRecording) {
-//            stopRecording();
-//        }
-//    }
-//}
 
 
