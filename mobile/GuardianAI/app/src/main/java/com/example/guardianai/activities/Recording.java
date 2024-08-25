@@ -1,7 +1,3 @@
-
-
-
-
 package com.example.guardianai.activities;
 
 import android.Manifest;
