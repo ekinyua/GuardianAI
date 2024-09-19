@@ -124,21 +124,111 @@ public class SignIn extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                Toast.makeText(SignIn.this, "Invalid credentials", Toast.LENGTH_SHORT).show();
+                                if (response.code() == 401) {
+                                    Toast.makeText(SignIn.this, "Invalid email or password. Please try again.", Toast.LENGTH_LONG).show();
+                                } else if (response.code() == 500) {
+                                    Toast.makeText(SignIn.this, "Server error. Please try again later.", Toast.LENGTH_LONG).show();
+                                } else {
+                                    Toast.makeText(SignIn.this, "Unexpected error. Code: " + response.code(), Toast.LENGTH_LONG).show();
+                                }
                             }
                         });
                     }
-                } catch (IOException | JSONException e) {
+                } catch (IOException e) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            Toast.makeText(SignIn.this, "An error occurred: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            if (e instanceof java.net.SocketTimeoutException) {
+                                Toast.makeText(SignIn.this, "Network timeout. Please check your connection and try again.", Toast.LENGTH_LONG).show();
+                            } else {
+                                Toast.makeText(SignIn.this, "Network error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    });
+                } catch (JSONException e) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(SignIn.this, "Data parsing error. Please contact support.", Toast.LENGTH_LONG).show();
                         }
                     });
                 }
             }
         }).start();
     }
+
+
+//    private void loginUser(String email, String password) {
+//        // Create a logging interceptor
+//        HttpLoggingInterceptor loggingInterceptor = new HttpLoggingInterceptor();
+//        loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+//
+//        // Setting timeout values to 30 seconds and adding the logging interceptor
+//        OkHttpClient client = new OkHttpClient.Builder()
+//                .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+//                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+//                .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+//                .addInterceptor(loggingInterceptor) // Add logging interceptor
+//                .build();
+//
+//        JSONObject json = new JSONObject();
+//        try {
+//            json.put("email", email);
+//            json.put("password", password);
+//        } catch (JSONException e) {
+//            e.printStackTrace();
+//        }
+//
+//        RequestBody body = RequestBody.create(json.toString(), MediaType.get("application/json; charset=utf-8"));
+//        Request request = new Request.Builder()
+//                .url("https://guardian-backend-6lro.onrender.com/api/v1/user/login")
+//                .post(body)
+//                .build();
+//
+//        new Thread(new Runnable() {
+//            @Override
+//            public void run() {
+//                try {
+//                    Response response = client.newCall(request).execute();
+//                    if (response.isSuccessful()) {
+//                        String responseData = response.body().string();
+//                        JSONObject jsonResponse = new JSONObject(responseData);
+//                        String userId = jsonResponse.getString("user_id");
+//
+//                        // Save user ID to SharedPreferences
+//                        SharedPreferences sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+//                        SharedPreferences.Editor editor = sharedPreferences.edit();
+//                        editor.putString("user_id", userId);
+//                        editor.apply();
+//
+//                        runOnUiThread(new Runnable() {
+//                            @Override
+//                            public void run() {
+//                                Intent intent = new Intent(SignIn.this, LocationSharing.class);
+//                                intent.putExtra("USER_ID", userId);
+//                                startActivity(intent);
+//                                finish();
+//                            }
+//                        });
+//                    } else {
+//                        runOnUiThread(new Runnable() {
+//                            @Override
+//                            public void run() {
+//                                Toast.makeText(SignIn.this, "Invalid credentials", Toast.LENGTH_SHORT).show();
+//                            }
+//                        });
+//                    }
+//                } catch (IOException | JSONException e) {
+//                    runOnUiThread(new Runnable() {
+//                        @Override
+//                        public void run() {
+//                            Toast.makeText(SignIn.this, "An error occurred: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+//                        }
+//                    });
+//                }
+//            }
+//        }).start();
+//    }
 }
 
 

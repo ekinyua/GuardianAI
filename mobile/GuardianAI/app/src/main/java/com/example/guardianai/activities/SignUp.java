@@ -90,8 +90,12 @@ public class SignUp extends AppCompatActivity {
             @Override
             public void onFailure(Call call, IOException e) {
                 runOnUiThread(() -> {
+                    if (e instanceof java.net.SocketTimeoutException) {
+                        Toast.makeText(SignUp.this, "Network timeout. Please check your connection and try again.", Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(SignUp.this, "Network error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    }
                     Log.e(TAG, "Registration failed: " + e.getMessage());
-                    Toast.makeText(SignUp.this, "Registration Failed", Toast.LENGTH_SHORT).show();
                 });
             }
 
@@ -99,17 +103,66 @@ public class SignUp extends AppCompatActivity {
             public void onResponse(Call call, Response response) throws IOException {
                 if (response.isSuccessful()) {
                     runOnUiThread(() -> {
-                        Toast.makeText(SignUp.this, "Registration Successful", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(SignUp.this, "Registration Successful! Please log in.", Toast.LENGTH_LONG).show();
                         Intent intent = new Intent(SignUp.this, SignIn.class);
                         startActivity(intent);
                     });
                 } else {
                     runOnUiThread(() -> {
+                        if (response.code() == 400) {
+                            Toast.makeText(SignUp.this, "Invalid input. Please check the data and try again.", Toast.LENGTH_LONG).show();
+                        } else if (response.code() == 409) {
+                            Toast.makeText(SignUp.this, "This email is already registered. Please log in.", Toast.LENGTH_LONG).show();
+                        } else if (response.code() == 500) {
+                            Toast.makeText(SignUp.this, "Server error. Please try again later.", Toast.LENGTH_LONG).show();
+                        } else {
+                            Toast.makeText(SignUp.this, "Unexpected error: " + response.code(), Toast.LENGTH_LONG).show();
+                        }
                         Log.e(TAG, "Registration failed: " + response.message());
-                        Toast.makeText(SignUp.this, "Registration Failed", Toast.LENGTH_SHORT).show();
                     });
                 }
             }
         });
     }
+
+
+//    private void registerUser(JSONObject jsonBody) {
+//        OkHttpClient client = new OkHttpClient.Builder()
+//                .connectTimeout(30, TimeUnit.SECONDS)
+//                .writeTimeout(30, TimeUnit.SECONDS)
+//                .readTimeout(30, TimeUnit.SECONDS)
+//                .build();
+//
+//        RequestBody body = RequestBody.create(jsonBody.toString(), JSON);
+//        Request request = new Request.Builder()
+//                .url(REGISTER_URL)
+//                .post(body)
+//                .build();
+//
+//        client.newCall(request).enqueue(new Callback() {
+//            @Override
+//            public void onFailure(Call call, IOException e) {
+//                runOnUiThread(() -> {
+//                    Log.e(TAG, "Registration failed: " + e.getMessage());
+//                    Toast.makeText(SignUp.this, "Registration Failed", Toast.LENGTH_SHORT).show();
+//                });
+//            }
+//
+//            @Override
+//            public void onResponse(Call call, Response response) throws IOException {
+//                if (response.isSuccessful()) {
+//                    runOnUiThread(() -> {
+//                        Toast.makeText(SignUp.this, "Registration Successful", Toast.LENGTH_SHORT).show();
+//                        Intent intent = new Intent(SignUp.this, SignIn.class);
+//                        startActivity(intent);
+//                    });
+//                } else {
+//                    runOnUiThread(() -> {
+//                        Log.e(TAG, "Registration failed: " + response.message());
+//                        Toast.makeText(SignUp.this, "Registration Failed", Toast.LENGTH_SHORT).show();
+//                    });
+//                }
+//            }
+//        });
+//    }
 }

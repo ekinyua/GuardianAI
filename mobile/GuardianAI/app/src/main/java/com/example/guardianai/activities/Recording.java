@@ -92,6 +92,9 @@ public class Recording extends AppCompatActivity {
 
         handler = new Handler(Looper.getMainLooper());
 
+        // Make dummy API call when the activity is opened to wake the emotion detection server
+        makeDummyApiCall();
+
         recordingControlText.setOnClickListener(v -> {
             if (isRecording) {
                 stopRecording();
@@ -163,6 +166,8 @@ public class Recording extends AppCompatActivity {
                         byte[] audioData = audioBuffer.toByteArray();
                         saveAudioToFile(audioData);
 
+
+
                         // Get emotions from API
                         getEmotionsFromAPI();
 
@@ -176,6 +181,37 @@ public class Recording extends AppCompatActivity {
                 Log.e(TAG, "Error stopping recording: " + e.getMessage(), e);
             }
         }
+    }
+
+    // Dummy API call to wake up the server
+    private void makeDummyApiCall() {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(EMOTION_API_URL) // You can use your actual API URL
+                .addHeader("Authorization", "Bearer " + EMOTION_API_KEY)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                Log.e(TAG, "Dummy API call failed: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    Log.e(TAG, "Dummy API call failed. Response code: " + response.code());
+                    return;
+                }
+
+                Log.d(TAG, "Dummy API call was successful. Response code: " + response.code());
+            }
+        });
     }
 
     private void saveAudioToFile(byte[] audioData) {
@@ -305,6 +341,7 @@ public class Recording extends AppCompatActivity {
 
                 } catch (Exception e) {
                     Log.e(TAG, "Failed to parse API response: " + e.getMessage(), e);
+                    Toast.makeText(Recording.this, "Failed to parse API response: ", Toast.LENGTH_SHORT).show();
                 }
             }
         });
