@@ -2,6 +2,7 @@ package com.example.guardianai.activities;
 import java.util.concurrent.TimeUnit;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
@@ -99,11 +100,25 @@ public class SignUp extends AppCompatActivity {
                 });
             }
 
+
+
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 if (response.isSuccessful()) {
                     runOnUiThread(() -> {
                         Toast.makeText(SignUp.this, "Registration Successful! Please log in.", Toast.LENGTH_LONG).show();
+
+                        // Save emergency contact to SharedPreferences
+                        SharedPreferences sharedPreferences = getSharedPreferences("UserPrefs", MODE_PRIVATE);
+                        SharedPreferences.Editor editor = sharedPreferences.edit();
+
+                        // Save the emergency contact from the form
+                        EditText emergencyContactEditText = findViewById(R.id.emergency_contact);
+                        String emergencyContact = emergencyContactEditText.getText().toString();
+                        editor.putString("emergency_contact", emergencyContact);
+                        editor.apply();  // Save changes
+
+                        // Navigate to sign-in activity
                         Intent intent = new Intent(SignUp.this, SignIn.class);
                         startActivity(intent);
                     });
@@ -122,6 +137,31 @@ public class SignUp extends AppCompatActivity {
                     });
                 }
             }
+
+
+//            @Override
+//            public void onResponse(Call call, Response response) throws IOException {
+//                if (response.isSuccessful()) {
+//                    runOnUiThread(() -> {
+//                        Toast.makeText(SignUp.this, "Registration Successful! Please log in.", Toast.LENGTH_LONG).show();
+//                        Intent intent = new Intent(SignUp.this, SignIn.class);
+//                        startActivity(intent);
+//                    });
+//                } else {
+//                    runOnUiThread(() -> {
+//                        if (response.code() == 400) {
+//                            Toast.makeText(SignUp.this, "Invalid input. Please check the data and try again.", Toast.LENGTH_LONG).show();
+//                        } else if (response.code() == 409) {
+//                            Toast.makeText(SignUp.this, "This email is already registered. Please log in.", Toast.LENGTH_LONG).show();
+//                        } else if (response.code() == 500) {
+//                            Toast.makeText(SignUp.this, "Server error. Please try again later.", Toast.LENGTH_LONG).show();
+//                        } else {
+//                            Toast.makeText(SignUp.this, "Unexpected error: " + response.code(), Toast.LENGTH_LONG).show();
+//                        }
+//                        Log.e(TAG, "Registration failed: " + response.message());
+//                    });
+//                }
+//            }
         });
     }
 

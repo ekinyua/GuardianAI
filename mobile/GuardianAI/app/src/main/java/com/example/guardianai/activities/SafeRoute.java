@@ -271,6 +271,10 @@ public class SafeRoute extends AppCompatActivity implements OnMapReadyCallback {
         mMap = googleMap;
         // Center the map around Kenya
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(KENYA_CENTER, DEFAULT_ZOOM));
+
+        // Enable zoom controls
+        mMap.getUiSettings().setZoomControlsEnabled(true);
+
         displayDangerZones();
     }
 
